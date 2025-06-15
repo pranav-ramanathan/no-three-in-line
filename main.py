@@ -26,7 +26,6 @@ class SymmetryType(str, Enum):
     BOTH_DIAGONALS = "both_diagonals"
     ROTATIONAL_90 = "rotational_90"
     ROTATIONAL_180 = "rotational_180"
-    ROTATIONAL_270 = "rotational_270"
     ALL = "all"
 
 
