@@ -58,17 +58,13 @@ def time_it(func: Callable) -> Callable:
 
 
 def generate_grid_points(n: int) -> List[Point]:
-    """Generate all points in an n*n grid."""
+    """Return all (i, j) points in an n x n grid."""
     return [(i, j) for i in range(n) for j in range(n)]
 
 
 def normalize_line_equation(a: int, b: int, c: int) -> Line:
     """
     Normalize a line equation ax + by + c = 0 to canonical form.
-
-    This ensures that equivalent lines have the same representation by:
-    1. Dividing by GCD to get smallest integer coefficients
-    2. Ensuring consistent sign (a > 0, or a = 0 and b > 0)
 
     Args:
         a, b, c: Coefficients of line equation ax + by + c = 0
@@ -92,10 +88,6 @@ def normalize_line_equation(a: int, b: int, c: int) -> Line:
 def get_line_through_points(p1: Point, p2: Point) -> Line:
     """
     Calculate the line equation passing through two points.
-
-    For points (x1, y1) and (x2, y2), the line equation is:
-    (y1 - y2)x + (x2 - x1)y + (x1*y2 - y1*x2) = 0
-
     Args:
         p1, p2: Two distinct points
 
@@ -139,7 +131,7 @@ def find_collinear_points(points: List[Point]) -> Dict[Line, PointSet]:
 
 def get_symmetric_point(point: Point, n: int, symmetry_type: str) -> Point:
     """
-    Get the symmetric counterpart of a point for different symmetry types.
+    Get the counterpart of a point for a given symmetry type.
     
     Args:
         point: Original point (i, j)
@@ -171,7 +163,7 @@ def get_symmetric_point(point: Point, n: int, symmetry_type: str) -> Point:
 
 def get_symmetry_constraints(points: List[Point], n: int, symmetry_type: SymmetryType) -> List[List[Tuple[Point, Point]]]:
     """
-    Generate symmetry constraint pairs based on the requested symmetry type.
+    Generate symmetry constraints based on symmetry type.
     
     Args:
         points: All grid points
@@ -232,25 +224,19 @@ def get_symmetry_constraints(points: List[Point], n: int, symmetry_type: Symmetr
 def build_optimization_model(points: List[Point],
                            collinear_groups: Dict[Line, PointSet],
                            min_points: int,
+                           max_points: int,
                            symmetry_type: SymmetryType = SymmetryType.NONE,
                            threads: int = None) -> Tuple[Model, Dict[Point, any]]:
     """
-    Build the Integer Linear Programming model for the no-three-in-line problem.
-
-    Variables: Binary variable for each grid point (1 = selected, 0 = not selected)
-    Objective: Maximize number of selected points
-    Constraints:
-        - At most 2 points selected on any line with 3+ points
-        - At least min_points total points selected (optional tightening)
-        - Symmetry constraints if requested
-
+    Build the ILP model for the no-three-in-line problem.
+    
     Args:
         points: All grid points
         collinear_groups: Groups of collinear points
         min_points: Minimum number of points to select
+        max_points: Maximum number of points to select
         symmetry_type: Type of symmetry to enforce
-        threads: Number of threads to use (None for automatic)
-
+        threads: Number of threads to use
     Returns:
         Tuple of (model, point_variables)
     """
@@ -289,6 +275,13 @@ def build_optimization_model(points: List[Point],
         model.addConstr(
             sum(point_vars.values()) >= min_points,
             name="minimum_points"
+        )
+
+    # Optional constraint: cap the number of points
+    if max_points > 0:
+        model.addConstr(
+            sum(point_vars.values()) <= max_points,
+            name="maximum_points"
         )
 
     # Add symmetry constraints
@@ -479,22 +472,8 @@ def solve(
     time_limit: Annotated[int, typer.Option(help="Time limit in seconds")] = None
 ):
     """
-    Solve the no-three-in-line problem for an n*n grid with optional symmetry constraints.
-
-    This finds the maximum number of points that can be placed on an n*n grid
-    such that no three points are collinear (lie on the same straight line).
-    
-    Symmetry options:
-    - none: No symmetry constraints
-    - horizontal: Mirror symmetry across vertical axis
-    - vertical: Mirror symmetry across horizontal axis  
-    - both_axes: Both horizontal and vertical symmetry
-    - diagonal: Mirror symmetry across main diagonal
-    - anti_diagonal: Mirror symmetry across anti-diagonal
-    - both_diagonals: Both diagonal symmetries
-    - rotational_90: 4-fold rotational symmetry
-    - rotational_180: 2-fold rotational symmetry
-    - all: All symmetries combined
+    Solve the no-three-in-line problem for an n x n grid, optionally enforcing symmetry.
+    Only searches for solutions with exactly 2n points (the theoretical max).
     """
     print(f"Solving no-three-in-line problem for {n}*{n} grid...")
     print(f"Symmetry constraint: {symmetry.value}")
@@ -511,7 +490,12 @@ def solve(
 
     # Step 3: Build optimization model with symmetry
     model, point_vars = build_optimization_model(
-        points, collinear_groups, min_points=2*n, symmetry_type=symmetry, threads=threads
+        points,
+        collinear_groups,
+        min_points=2 * n,
+        symmetry_type=symmetry,
+        max_points=2 * n,
+        threads=threads,
     )
     
     # Set time limit if specified
@@ -542,7 +526,7 @@ def compare_symmetries(
     time_limit: Annotated[int, typer.Option(help="Time limit per symmetry in seconds")] = 300
 ):
     """
-    Compare solutions for different symmetry types to find the most aesthetically pleasing ones.
+    Compare different symmetry types, always searching for 2n-point solutions only.
     """
     symmetry_types = [
         SymmetryType.NONE,
@@ -568,8 +552,12 @@ def compare_symmetries(
         
         # Build and solve model
         model, point_vars = build_optimization_model(
-            points, collinear_groups, min_points=2*n, 
-            symmetry_type=symmetry, threads=threads
+            points,
+            collinear_groups,
+            min_points=2 * n,
+            symmetry_type=symmetry,
+            max_points=2 * n,
+            threads=threads,
         )
         
         if time_limit:
