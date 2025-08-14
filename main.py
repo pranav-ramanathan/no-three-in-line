@@ -7,6 +7,12 @@ from functools import wraps
 import time
 from enum import Enum
 
+"""
+use memoisation
+
+90 rot with odd n with diagonals doing something
+"""
+
 import typer
 
 Point = Tuple[int, int]
@@ -301,7 +307,9 @@ def build_optimization_model(points: List[Point],
         print(f"Added {constraint_count} symmetry constraints for {symmetry_type.value} symmetry")
 
     return model, point_vars
-
+"""
+MOLS - Latin Squares
+"""
 
 @time_it
 def solve_optimization_model(model: Model) -> None:
